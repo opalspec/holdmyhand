@@ -19,6 +19,9 @@ import path from 'node:path';
 
 import { FILE_SCHEMA_VERSION, LIMITS } from './schema.js';
 
+// Files inside `.hmh/` that are NOT walkthroughs (so list()/scans ignore them).
+const RESERVED_FILES = new Set(['config.json']);
+
 /**
  * @param {object} opts
  * @param {string} opts.baseDir  The `.hmh/` directory (already inside the target repo).
@@ -142,9 +145,12 @@ export function createStore({ baseDir }) {
     }
     const out = [];
     for (const name of names) {
-      if (!name.endsWith('.json')) continue;
+      if (!name.endsWith('.json') || RESERVED_FILES.has(name)) continue;
       try {
         const w = migrate(JSON.parse(await readFile(path.join(baseDir, name), 'utf8')));
+        // A walkthrough file always has a stamped id; skip anything else that
+        // happens to be JSON in the folder (e.g. config.json).
+        if (!w.id) continue;
         out.push({
           id: w.id,
           slug: w.slug,
