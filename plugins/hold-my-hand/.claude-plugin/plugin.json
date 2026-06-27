@@ -1,0 +1,7 @@
+{
+  "name": "hold-my-hand",
+  "description": "Ask a plain-English question about this codebase and get an interactive, step-by-step walkthrough in your browser.",
+  "author": { "name": "OpalSpec" },
+  "homepage": "https://github.com/opalspec/holdmyhand",
+  "license": "MIT"
+}

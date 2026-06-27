@@ -1,0 +1,14 @@
+{
+  "name": "holdmyhand",
+  "owner": { "name": "OpalSpec", "email": "" },
+  "metadata": { "pluginRoot": "./plugins" },
+  "plugins": [
+    {
+      "name": "hold-my-hand",
+      "source": "./plugins/hold-my-hand",
+      "description": "Ask a question about this codebase, get an interactive walkthrough.",
+      "homepage": "https://github.com/opalspec/holdmyhand",
+      "license": "MIT"
+    }
+  ]
+}

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hold My Hand — Walkthrough</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1f2530; --border: #2a313d;
+    --text: #e6e9ef; --muted: #9aa4b2; --accent: #7aa2f7; --accent-2: #9ece6a;
+    --code-bg: #0b0d12;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 120px; }
+  header.hero { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 24px; }
+  .eyebrow { color: var(--accent); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: 28px; margin: 6px 0 10px; }
+  .summary { color: var(--muted); }
+  .progress { display: flex; align-items: center; gap: 10px; margin: 20px 0 8px; color: var(--muted); font-size: 14px; }
+  .bar { flex: 1; height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .25s ease; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .card h2 { margin: 0 0 12px; font-size: 21px; }
+  .explanation { white-space: pre-wrap; }
+  .why { margin-top: 16px; padding: 12px 14px; background: var(--panel-2); border-left: 3px solid var(--accent-2); border-radius: 6px; color: #cdd6e4; }
+  .why strong { color: var(--accent-2); }
+  .codewrap { margin-top: 18px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .codehead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; background: var(--panel-2); font-size: 13px; color: var(--muted); }
+  .codehead .file { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #cdd6e4; word-break: break-all; }
+  .copybtn { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 12px; }
+  .copybtn:hover { color: var(--text); border-color: var(--accent); }
+  pre { margin: 0; padding: 14px; background: var(--code-bg); overflow: auto; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; }
+  nav.controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; }
+  button.nav { background: var(--accent); color: #0b0d12; border: 0; border-radius: 10px; padding: 11px 20px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  button.nav:disabled { opacity: .35; cursor: not-allowed; }
+  button.nav.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .ask { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(15,17,21,.95); border-top: 1px solid var(--border); backdrop-filter: blur(6px); }
+  .ask form { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; padding: 14px 20px; }
+  .ask input { flex: 1; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; font-size: 15px; }
+  .ask input:focus { outline: none; border-color: var(--accent); }
+  .ask button { background: var(--accent-2); color: #0b0d12; border: 0; border-radius: 10px; padding: 0 18px; font-weight: 600; cursor: pointer; }
+  .ask button:disabled { opacity: .5; cursor: progress; }
+  .status { max-width: 860px; margin: 0 auto; padding: 0 20px 10px; color: var(--text); font-size: 14px; min-height: 20px; }
+  body.busy { cursor: progress; }
+  body.busy .card { opacity: .45; transition: opacity .2s; }
+  body.busy .status { color: var(--accent); }
+  .qa { margin-top: 22px; border-top: 1px dashed var(--border); padding-top: 16px; }
+  .qa-title { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .qa-item { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .qa-q { font-weight: 600; color: var(--accent); }
+  .qa-q::before { content: "Q "; opacity: .6; }
+  .qa-a { margin-top: 6px; white-space: pre-wrap; }
+  .qa-a::before { content: "A "; opacity: .6; font-weight: 600; }
+  .qa-jumps { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .qa-jump { background: transparent; color: var(--accent-2); border: 1px solid var(--border); border-radius: 99px; padding: 4px 11px; font-size: 12.5px; cursor: pointer; }
+  .qa-jump:hover { border-color: var(--accent-2); }
+  .qa-new { animation: flash 1.6s ease; }
+  @keyframes flash { from { background: rgba(122,162,247,.22); } to { background: var(--panel-2); } }
+  .ask .ctx { max-width: 860px; margin: 0 auto; padding: 8px 20px 0; color: var(--muted); font-size: 12.5px; }
+  .ask .ctx b { color: var(--text); }
+  .glossary { margin-top: 28px; }
+  .glossary details { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px 16px; }
+  .glossary summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+  .glossary dt { font-weight: 600; margin-top: 10px; }
+  .glossary dd { margin: 2px 0 0; color: var(--muted); }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 13px; }
+  .topbar a { color: var(--accent); text-decoration: none; }
+  .topbar a:hover { text-decoration: underline; }
+  .stale { margin: 14px 0 0; padding: 12px 14px; background: #2a2410; border: 1px solid #6b5a16;
+           border-radius: 10px; color: #e8d9a0; font-size: 14px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .stale b { color: #f3e6b0; }
+  .stale .regen { background: transparent; color: #f3e6b0; border: 1px solid #6b5a16; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  .stale .regen:hover { border-color: #f3e6b0; }
+  .stale code { background: rgba(0,0,0,.3); padding: 1px 6px; border-radius: 5px; }
+  .regen-cmd { margin-top: 8px; padding: 10px 12px; background: var(--code-bg); border: 1px solid var(--border);
+               border-radius: 8px; font-size: 13px; display: none; }
+  .regen-cmd.show { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a id="liblink" href="#" style="display:none">&larr; Library</a>
+    <span></span>
+  </div>
+  <header class="hero">
+    <div class="eyebrow">Hold My Hand</div>
+    <h1 id="title"></h1>
+    <p class="summary" id="summary"></p>
+    <div class="stale" id="stale" style="display:none">
+      <span id="stale-text"></span>
+      <button class="regen" id="regen">Regenerate</button>
+    </div>
+    <div class="regen-cmd" id="regen-cmd"></div>
+  </header>
+
+  <div class="progress">
+    <span id="counter">Step 1</span>
+    <div class="bar"><span id="barfill"></span></div>
+  </div>
+
+  <section class="card" id="card"><!-- step rendered here --></section>
+
+  <nav class="controls">
+    <button class="nav secondary" id="prev">&larr; Back</button>
+    <button class="nav" id="next">Next &rarr;</button>
+  </nav>
+
+  <div class="glossary" id="glossary"></div>
+</div>
+
+<div class="ask">
+  <div class="ctx" id="askctx"></div>
+  <div class="status" id="status"></div>
+  <form id="askform">
+    <input id="askinput" type="text" autocomplete="off"
+           placeholder="Ask about this step — e.g. &quot;explain this more simply&quot; or &quot;where is this called?&quot;" />
+    <button type="submit" id="askbtn">Ask</button>
+  </form>
+</div>
+
+<script>
+  // Seeded by the renderer; the server is the source of truth after follow-ups.
+  let data = __WALKTHROUGH_JSON__;
+  // Page metadata: { token?, stale?, builtAtSha?, builtAt?, dirtyChanged?,
+  //                  libraryUrl?, regenerateHint? }. Empty {} for the POC CLI.
+  const meta = __HMH_META_JSON__;
+  let index = 0;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+  // Token-aware fetch: every /api/* call presents the per-server token (§3.6).
+  function apiFetch(url, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    if (meta.token) headers['X-HMH-Token'] = meta.token;
+    return fetch(url, { ...options, headers });
+  }
+
+  function renderTop() {
+    if (meta.libraryUrl) {
+      const a = $('liblink');
+      a.href = meta.libraryUrl;
+      a.style.display = '';
+    }
+    if (meta.stale) {
+      const ago = meta.builtAt ? ` — built ${esc(meta.builtAt)}` : '';
+      const sha = meta.builtAtSha ? ` against <code>${esc(meta.builtAtSha.slice(0, 7))}</code>` : '';
+      const why = meta.dirtyChanged
+        ? 'the working tree has uncommitted changes'
+        : 'the code has moved on since this was built';
+      $('stale-text').innerHTML = `<b>Heads up:</b> ${why}${sha}${ago}. Excerpts may be out of date.`;
+      $('stale').style.display = '';
+    }
+  }
+
+  function renderMeta() {
+    $('title').textContent = data.title || 'Walkthrough';
+    $('summary').textContent = data.summary || '';
+    renderTop();
+    renderGlossary();
+  }
+
+  function renderGlossary() {
+    const g = data.glossary;
+    const el = $('glossary');
+    if (!g || !g.length) { el.innerHTML = ''; return; }
+    el.innerHTML =
+      '<details><summary>Glossary</summary><dl>' +
+      g.map((e) => `<dt>${esc(e.term)}</dt><dd>${esc(e.definition)}</dd>`).join('') +
+      '</dl></details>';
+  }
+
+  const indexOfId = (id) => (data.steps || []).findIndex((s) => s.id === id);
+
+  function goTo(i) {
+    if (i < 0 || i >= (data.steps || []).length) return;
+    index = i;
+    renderStep();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function renderQa(step, flashLast) {
+    const qa = step.qa || [];
+    if (!qa.length) return '';
+    let html = '<div class="qa"><div class="qa-title">Your questions about this step</div>';
+    qa.forEach((item, qi) => {
+      const isLast = flashLast && qi === qa.length - 1;
+      html += `<div class="qa-item${isLast ? ' qa-new' : ''}">`;
+      html += `<div class="qa-q">${esc(item.question)}</div>`;
+      html += `<div class="qa-a">${esc(item.answer)}</div>`;
+      const jumps = (item.relatedSteps || [])
+        .map((id) => ({ id, i: indexOfId(id) }))
+        .filter((x) => x.i >= 0);
+      if (jumps.length) {
+        html += '<div class="qa-jumps">';
+        jumps.forEach((x) => {
+          const s = data.steps[x.i];
+          html += `<button class="qa-jump" data-goto="${x.i}">→ Step ${x.i + 1}: ${esc(s.heading)}</button>`;
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderStep(flashLastQa) {
+    const steps = data.steps || [];
+    if (index >= steps.length) index = steps.length - 1;
+    if (index < 0) index = 0;
+    const step = steps[index] || {};
+
+    let html = `<h2>${esc(step.heading)}</h2>`;
+    html += `<div class="explanation">${esc(step.explanation)}</div>`;
+    if (step.code) {
+      const loc = [step.file, step.lines].filter(Boolean).join(' : ');
+      html += `<div class="codewrap"><div class="codehead">` +
+              `<span class="file">${esc(loc || step.language || 'code')}</span>` +
+              `<button class="copybtn" id="copy">Copy</button></div>` +
+              `<pre><code>${esc(step.code)}</code></pre></div>`;
+    }
+    if (step.why) html += `<div class="why"><strong>Why this matters:</strong> ${esc(step.why)}</div>`;
+    html += renderQa(step, flashLastQa);
+    $('card').innerHTML = html;
+
+    const copy = $('copy');
+    if (copy) copy.onclick = () => {
+      navigator.clipboard?.writeText(step.code || '');
+      copy.textContent = 'Copied';
+      setTimeout(() => (copy.textContent = 'Copy'), 1200);
+    };
+    $('card').querySelectorAll('[data-goto]').forEach((b) => {
+      b.onclick = () => goTo(Number(b.dataset.goto));
+    });
+
+    $('counter').textContent = `Step ${index + 1} of ${steps.length}`;
+    $('barfill').style.width = `${((index + 1) / steps.length) * 100}%`;
+    $('prev').disabled = index === 0;
+    $('next').disabled = index === steps.length - 1;
+    $('askctx').innerHTML = `Asking about <b>Step ${index + 1}: ${esc(step.heading)}</b>`;
+  }
+
+  function renderAll() { renderMeta(); renderStep(); }
+
+  $('prev').onclick = () => { index--; renderStep(); };
+  $('next').onclick = () => { index++; renderStep(); };
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return; // don't hijack arrows while typing
+    if (e.key === 'ArrowLeft' && index > 0) { index--; renderStep(); }
+    if (e.key === 'ArrowRight' && index < data.steps.length - 1) { index++; renderStep(); }
+  });
+
+  $('askform').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const question = $('askinput').value.trim();
+    if (!question) return;
+    const step = data.steps[index];
+    const btn = $('askbtn');
+    btn.disabled = true;
+    btn.textContent = '…';
+    document.body.classList.add('busy');
+    $('status').textContent = '⏳ Thinking about this step (this can take up to a minute)…';
+    try {
+      const res = await apiFetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, stepId: step.id }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+      const { stepId, entry } = await res.json();
+      console.log('[hmh] answer for', stepId, entry);
+      // Additive: append the Q&A to its step locally; nothing else changes.
+      const target = data.steps.find((s) => s.id === stepId);
+      (target.qa ??= []).push(entry);
+      $('askinput').value = '';
+      // Stay on the step the user asked about; flash the new answer.
+      if (data.steps[index].id !== stepId) index = indexOfId(stepId);
+      renderStep(true);
+      $('card').querySelector('.qa-new')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const n = (entry.relatedSteps || []).length;
+      $('status').textContent = `✅ Answer added below this step${n ? ` (with ${n} related-step link${n > 1 ? 's' : ''})` : ''}.`;
+      setTimeout(() => ($('status').textContent = ''), 6000);
+    } catch (err) {
+      $('status').textContent = '❌ Error: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Ask';
+      document.body.classList.remove('busy');
+    }
+  });
+
+  // Regenerate: the page can't drive the live Claude session, so we surface the
+  // exact command to re-run in the chat (POST /api/regenerate returns the hint).
+  const regenBtn = $('regen');
+  if (regenBtn) regenBtn.onclick = async () => {
+    const box = $('regen-cmd');
+    let hint = meta.regenerateHint;
+    try {
+      const res = await apiFetch('/api/regenerate', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (res.ok) hint = (await res.json()).hint || hint;
+    } catch { /* fall back to the seeded hint */ }
+    box.innerHTML = hint
+      ? `To rebuild against the current code, run this in your Claude Code session:<br><br><code>${esc(hint)}</code>`
+      : 'Re-run the explain skill in your Claude Code session to rebuild this walkthrough.';
+    box.classList.add('show');
+  };
+
+  renderAll();
+</script>
+</body>
+</html>

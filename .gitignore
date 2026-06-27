@@ -1,0 +1,22 @@
+# Planning / internal design notes — not for distribution
+Planning/
+
+# Dependencies
+node_modules/
+
+# Generated walkthrough output (POC)
+walkthroughs/
+*.log
+
+# Per-codebase walkthrough data (only relevant if HMH is ever run on itself)
+.hmh/
+
+# NOTE: do NOT ignore plugins/hold-my-hand/dist/ — the built MCP server
+# (dist/hmh-mcp.mjs) MUST be committed so the plugin runs with no npm install.
+
+# Local config that points at a specific codebase
+hmh.config.local.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
