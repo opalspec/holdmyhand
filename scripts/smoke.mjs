@@ -112,6 +112,11 @@ async function testServer() {
   const sample = ['export function add(a, b) {', '  return a + b;', '}', ''].join('\n');
   await writeFile(path.join(codebase, 'src', 'math.js'), sample, 'utf8');
 
+  // Per-project port override via .hmh/config.json (no HMH_PORT env set).
+  const CONFIG_PORT = 7390;
+  await mkdir(path.join(codebase, '.hmh'), { recursive: true });
+  await writeFile(path.join(codebase, '.hmh', 'config.json'), JSON.stringify({ port: CONFIG_PORT }), 'utf8');
+
   const child = spawn('node', [BUNDLE], {
     env: { ...process.env, HMH_CODEBASE: codebase, HMH_NO_OPEN: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -158,6 +163,9 @@ async function testServer() {
     const out = JSON.parse(good.result.content[0].text);
     assert.ok(out.url && out.id, 'returns { url, id }');
     ok(`render_walkthrough persists + serves (${out.url})`);
+
+    assert.match(out.url, new RegExp(`:${CONFIG_PORT}$`), `.hmh/config.json port honored (${CONFIG_PORT})`);
+    ok(`.hmh/config.json "port" override honored (${CONFIG_PORT})`);
 
     // .hmh file written into the codebase
     const hmhFiles = await readdir(path.join(codebase, '.hmh'));

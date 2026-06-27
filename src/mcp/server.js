@@ -44,10 +44,36 @@ import LIBRARY_TEMPLATE from '../core/templates/library.html';
 const CODEBASE = process.env.HMH_CODEBASE || process.cwd();
 const IS_CHILD = process.env.HMH_CHILD_CLAUDE === '1';
 const HMH_DIR = path.join(CODEBASE, '.hmh');
-const PREFERRED_PORT = Number(process.env.HMH_PORT) || 7345;
+const CONFIG_PATH = path.join(HMH_DIR, 'config.json');
+const DEFAULT_PORT = 7345;
 const TOKEN = randomBytes(24).toString('hex');
 
 const store = createStore({ baseDir: HMH_DIR });
+
+// Optional per-project settings the user controls (e.g. { "port": 8000 }). Lives
+// in <repo>/.hmh/config.json so it survives plugin updates and is never inside
+// the installed plugin. Loaded once, leniently (any error → no settings).
+let projectConfig = null;
+async function loadProjectConfig() {
+  if (projectConfig) return projectConfig;
+  try {
+    projectConfig = JSON.parse(await readFile(CONFIG_PATH, 'utf8'));
+  } catch {
+    projectConfig = {};
+  }
+  return projectConfig;
+}
+
+// Port precedence: HMH_PORT env (ephemeral override) > .hmh/config.json "port"
+// (persistent per-project) > built-in default. A free-port fallback applies on top.
+async function resolvePreferredPort() {
+  const cfg = await loadProjectConfig();
+  const envPort = Number(process.env.HMH_PORT);
+  const cfgPort = Number(cfg.port);
+  if (Number.isInteger(envPort) && envPort > 0) return envPort;
+  if (Number.isInteger(cfgPort) && cfgPort > 0) return cfgPort;
+  return DEFAULT_PORT;
+}
 
 // ── logging (stderr + best-effort file; NEVER stdout) ───────────────────────
 async function log(msg) {
@@ -234,7 +260,7 @@ async function ensureHttp() {
       try { sendJson(res, 500, { error: err.message }); } catch { /* headers sent */ }
     });
   });
-  let port = PREFERRED_PORT;
+  let port = await resolvePreferredPort();
   for (let i = 0; i < 25; i++) {
     try {
       await listen(server, port);

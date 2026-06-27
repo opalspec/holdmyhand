@@ -21279,6 +21279,7 @@ async function renderLibrary(items, opts = {}) {
 import { readFile as readFile2, writeFile, rename, readdir, mkdir, access } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path2 from "node:path";
+var RESERVED_FILES = /* @__PURE__ */ new Set(["config.json"]);
 function createStore({ baseDir }) {
   const queues = /* @__PURE__ */ new Map();
   function enqueue(id, task) {
@@ -21367,9 +21368,10 @@ function createStore({ baseDir }) {
     }
     const out = [];
     for (const name of names) {
-      if (!name.endsWith(".json")) continue;
+      if (!name.endsWith(".json") || RESERVED_FILES.has(name)) continue;
       try {
         const w = migrate(JSON.parse(await readFile2(path2.join(baseDir, name), "utf8")));
+        if (!w.id) continue;
         out.push({
           id: w.id,
           slug: w.slug,
@@ -22093,9 +22095,28 @@ var library_default = `<!DOCTYPE html>
 var CODEBASE = process.env.HMH_CODEBASE || process.cwd();
 var IS_CHILD = process.env.HMH_CHILD_CLAUDE === "1";
 var HMH_DIR = path3.join(CODEBASE, ".hmh");
-var PREFERRED_PORT = Number(process.env.HMH_PORT) || 7345;
+var CONFIG_PATH = path3.join(HMH_DIR, "config.json");
+var DEFAULT_PORT = 7345;
 var TOKEN = randomBytes2(24).toString("hex");
 var store = createStore({ baseDir: HMH_DIR });
+var projectConfig = null;
+async function loadProjectConfig() {
+  if (projectConfig) return projectConfig;
+  try {
+    projectConfig = JSON.parse(await readFile3(CONFIG_PATH, "utf8"));
+  } catch {
+    projectConfig = {};
+  }
+  return projectConfig;
+}
+async function resolvePreferredPort() {
+  const cfg = await loadProjectConfig();
+  const envPort = Number(process.env.HMH_PORT);
+  const cfgPort = Number(cfg.port);
+  if (Number.isInteger(envPort) && envPort > 0) return envPort;
+  if (Number.isInteger(cfgPort) && cfgPort > 0) return cfgPort;
+  return DEFAULT_PORT;
+}
 async function log(msg) {
   const line = `[hmh ${(/* @__PURE__ */ new Date()).toISOString()}] ${msg}
 `;
@@ -22296,7 +22317,7 @@ async function ensureHttp() {
       }
     });
   });
-  let port = PREFERRED_PORT;
+  let port = await resolvePreferredPort();
   for (let i = 0; i < 25; i++) {
     try {
       await listen(server, port);
