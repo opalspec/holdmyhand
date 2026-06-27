@@ -1,0 +1,27 @@
+{
+  "name": "hold-my-hand",
+  "version": "0.1.0",
+  "description": "Ask a plain-English question about a codebase, get an interactive step-by-step walkthrough.",
+  "type": "module",
+  "bin": {
+    "hmh": "bin/hmh.js"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "start": "node bin/hmh.js",
+    "build:skill": "node build-skill.mjs",
+    "build:plugin": "node build-skill.mjs && node build.mjs",
+    "build": "npm run build:plugin",
+    "check:built": "node build.mjs && git diff --quiet -- plugins/hold-my-hand/dist || (echo 'dist is stale — run npm run build:plugin and commit' && exit 1)",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}

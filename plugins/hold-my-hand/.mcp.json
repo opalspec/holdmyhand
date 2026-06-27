@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "hmh": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/hmh-mcp.mjs"],
+      "env": { "HMH_CODEBASE": "${CLAUDE_PROJECT_DIR}" }
+    }
+  }
+}
