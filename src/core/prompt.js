@@ -9,6 +9,16 @@ const JSON_ONLY_RULES = `Output format (CRITICAL — follow exactly):
 - Do NOT write any preamble, explanation, apology, or sign-off — not even one sentence.
 - Do NOT refuse, hedge, or ask for clarification, and never begin with phrases like "I don't", "I can't", "Here is", or "Sure". If information is incomplete, still return your best effort as JSON.`;
 
+const EXPLANATION_QUALITY_RULES = `Quality bar:
+- Start with the direct answer, then build the explanation.
+- Prefer concrete examples over broad generalities.
+- Tie claims back to this codebase. When you mention code that exists here, inspect it first.
+- Use small code excerpts or pseudo-code when they make the explanation clearer.
+- Label pseudo-code clearly; do not present invented code as existing code.
+- For design or "which pattern?" questions, compare the local approach with relevant alternatives, include tradeoffs, and end with a decision rule.
+- Mention popular frameworks, libraries, or industry practices only when they are genuinely relevant to the user's question. If an option is not implemented in this codebase, say so clearly.
+- Keep simple questions concise; add deeper sections only when they materially improve the answer.`;
+
 const GENERATE_RULES = `You are explaining a codebase to someone who is smart but unfamiliar with it.
 
 Your job:
@@ -17,6 +27,8 @@ Your job:
 3. Explain things simply. Avoid jargon; when you must use a term, explain it. Assume the reader is a capable developer but new to THIS code.
 4. Use REAL code excerpts from the codebase, with the file path and (where possible) line range. Keep excerpts short and focused on the point being made.
 5. Order the steps so each one builds on the last, telling a coherent story.
+
+${EXPLANATION_QUALITY_RULES}
 
 ${JSON_ONLY_RULES}
 - The JSON MUST match this shape exactly:
@@ -68,6 +80,18 @@ export function buildQuestionPrompt({ walkthrough, step, question }) {
   return `You are helping a reader who is part-way through a step-by-step walkthrough of a codebase. They are currently reading ONE step and have a follow-up question about it.
 
 Answer their question in plain English, building on what this step already says. You may inspect the codebase with your tools if needed. Your answer must be self-contained and must NOT rewrite or restate the whole walkthrough.
+
+${EXPLANATION_QUALITY_RULES}
+
+Follow-up answer shaping:
+- For "how does this work?" questions, explain the flow in order and include a minimal example when it helps.
+- For "would we / should we / what pattern?" questions, give a practical recommendation for this codebase, show the current/local pattern, show relevant alternatives, and include pros/cons or tradeoffs.
+- For "how would I change this?" questions, name the likely files, sketch the sequence, include pseudo-code or code examples, and mention tests or edge cases.
+- For debugging questions, give the likely cause, where to inspect first, and concrete checks before suggesting rewrites.
+- Put the main prose in "answer". Use Markdown headings, bullets, simple tables, inline code, and fenced code blocks when they make the answer easier to scan.
+- Put standalone examples in "codeExamples" when they deserve their own code block.
+- Put option comparisons in "tradeoffs" when the user asks about patterns, alternatives, or architectural choices.
+- Put one concise takeaway in "recommendation" when the user asks what to choose or what to do.
 
 If other steps in the walkthrough are relevant to your answer, you may refer to them naturally in the prose AND list their ids in "relatedSteps" so the reader can jump to them.
 

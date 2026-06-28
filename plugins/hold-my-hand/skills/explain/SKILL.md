@@ -22,6 +22,12 @@ JSON shape matter more than prose flourish.
    - For each step that shows code, quote a **real, verbatim** excerpt and set `file`
      to its **repo-relative** path. Keep excerpts short and on-point. You may omit
      `lines` — the render tool locates the snippet and fills in the real line range.
+   - Start with the direct answer, then build the explanation with concrete examples.
+   - For design or "which pattern?" questions, compare the local approach with relevant
+     alternatives, include tradeoffs, and end with a decision rule.
+   - Mention popular frameworks, libraries, or industry practices only when they are
+     genuinely relevant. If an option is not implemented in this codebase, say so.
+   - Label pseudo-code clearly; do not present invented code as existing code.
 3. **Render it.** Call the MCP tool **`render_walkthrough`** with `{ "walkthrough": <your JSON> }`.
 4. **Self-correct.** If the tool returns validation or source-verification problems, it
    lists each one precisely. Fix exactly those (most often: an excerpt that wasn't found

@@ -21135,9 +21135,24 @@ var repoRelativeFile = external_exports.string().max(400).refine((p) => {
   if (norm.startsWith("//")) return false;
   return !norm.split("/").includes("..");
 }, { message: 'file must be a relative path inside the repo (no absolute paths, drive letters, or "..")' });
+var answerCodeExampleSchema = external_exports.object({
+  title: external_exports.string().min(1).max(200).optional(),
+  language: external_exports.string().max(40).optional(),
+  code: external_exports.string().min(1).max(LIMITS.maxCode),
+  caption: external_exports.string().max(1e3).optional()
+});
+var answerTradeoffSchema = external_exports.object({
+  option: external_exports.string().min(1).max(300),
+  pros: external_exports.array(external_exports.string().min(1).max(800)).max(8).optional().default([]),
+  cons: external_exports.array(external_exports.string().min(1).max(800)).max(8).optional().default([]),
+  bestWhen: external_exports.string().max(1e3).optional()
+});
 var qaEntrySchema = external_exports.object({
   question: external_exports.string().min(1).max(LIMITS.maxQuestion),
   answer: external_exports.string().min(1).max(LIMITS.maxAnswer),
+  recommendation: external_exports.string().max(2e3).optional(),
+  codeExamples: external_exports.array(answerCodeExampleSchema).max(6).optional().default([]),
+  tradeoffs: external_exports.array(answerTradeoffSchema).max(8).optional().default([]),
   relatedSteps: external_exports.array(external_exports.string()).optional().default([]),
   askedAt: external_exports.string().optional()
   // stamped by the server when persisted
@@ -21178,7 +21193,10 @@ var walkthroughSchema = external_exports.object({
   builtAtDirtyHash: external_exports.string().nullable().optional()
 });
 var answerSchema = external_exports.object({
-  answer: external_exports.string().min(1),
+  answer: external_exports.string().min(1).max(LIMITS.maxAnswer),
+  recommendation: external_exports.string().max(2e3).optional(),
+  codeExamples: external_exports.array(answerCodeExampleSchema).max(6).optional().default([]),
+  tradeoffs: external_exports.array(answerTradeoffSchema).max(8).optional().default([]),
   relatedSteps: external_exports.array(external_exports.string()).optional().default([])
 });
 var schemaDescription = `{
@@ -21203,7 +21221,24 @@ var schemaDescription = `{
   ]
 }`;
 var answerSchemaDescription = `{
-  "answer": "<plain-English answer to the reader's question about this step>",
+  "answer": "<plain-English answer to the reader's question. Markdown is allowed for short headings, bullets, tables, inline code, and fenced code blocks. Start with the direct answer.>",
+  "recommendation": "<optional: one concise recommendation when the question asks what to choose or what to do>",
+  "codeExamples": [
+    {
+      "title": "<optional short title>",
+      "language": "<optional language id, e.g. dart, ts, js, py>",
+      "code": "<supporting code or pseudo-code. Use real code only when you inspected it; label pseudo-code in the title or caption.>",
+      "caption": "<optional: what this example demonstrates>"
+    }
+  ],
+  "tradeoffs": [
+    {
+      "option": "<option name>",
+      "pros": ["<short pro>"],
+      "cons": ["<short con>"],
+      "bestWhen": "<optional: when to choose this option>"
+    }
+  ],
   "relatedSteps": ["<optional: ids of OTHER steps whose content is relevant to this answer, e.g. 'step-3'>"]
 }`;
 function formatZodError(error2) {
@@ -21500,6 +21535,15 @@ var JSON_ONLY_RULES = `Output format (CRITICAL \u2014 follow exactly):
 - Nothing before it and nothing after it. No Markdown code fences, no comments.
 - Do NOT write any preamble, explanation, apology, or sign-off \u2014 not even one sentence.
 - Do NOT refuse, hedge, or ask for clarification, and never begin with phrases like "I don't", "I can't", "Here is", or "Sure". If information is incomplete, still return your best effort as JSON.`;
+var EXPLANATION_QUALITY_RULES = `Quality bar:
+- Start with the direct answer, then build the explanation.
+- Prefer concrete examples over broad generalities.
+- Tie claims back to this codebase. When you mention code that exists here, inspect it first.
+- Use small code excerpts or pseudo-code when they make the explanation clearer.
+- Label pseudo-code clearly; do not present invented code as existing code.
+- For design or "which pattern?" questions, compare the local approach with relevant alternatives, include tradeoffs, and end with a decision rule.
+- Mention popular frameworks, libraries, or industry practices only when they are genuinely relevant to the user's question. If an option is not implemented in this codebase, say so clearly.
+- Keep simple questions concise; add deeper sections only when they materially improve the answer.`;
 var GENERATE_RULES = `You are explaining a codebase to someone who is smart but unfamiliar with it.
 
 Your job:
@@ -21508,6 +21552,8 @@ Your job:
 3. Explain things simply. Avoid jargon; when you must use a term, explain it. Assume the reader is a capable developer but new to THIS code.
 4. Use REAL code excerpts from the codebase, with the file path and (where possible) line range. Keep excerpts short and focused on the point being made.
 5. Order the steps so each one builds on the last, telling a coherent story.
+
+${EXPLANATION_QUALITY_RULES}
 
 ${JSON_ONLY_RULES}
 - The JSON MUST match this shape exactly:
@@ -21531,6 +21577,18 @@ function buildQuestionPrompt({ walkthrough, step, question }) {
   return `You are helping a reader who is part-way through a step-by-step walkthrough of a codebase. They are currently reading ONE step and have a follow-up question about it.
 
 Answer their question in plain English, building on what this step already says. You may inspect the codebase with your tools if needed. Your answer must be self-contained and must NOT rewrite or restate the whole walkthrough.
+
+${EXPLANATION_QUALITY_RULES}
+
+Follow-up answer shaping:
+- For "how does this work?" questions, explain the flow in order and include a minimal example when it helps.
+- For "would we / should we / what pattern?" questions, give a practical recommendation for this codebase, show the current/local pattern, show relevant alternatives, and include pros/cons or tradeoffs.
+- For "how would I change this?" questions, name the likely files, sketch the sequence, include pseudo-code or code examples, and mention tests or edge cases.
+- For debugging questions, give the likely cause, where to inspect first, and concrete checks before suggesting rewrites.
+- Put the main prose in "answer". Use Markdown headings, bullets, simple tables, inline code, and fenced code blocks when they make the answer easier to scan.
+- Put standalone examples in "codeExamples" when they deserve their own code block.
+- Put option comparisons in "tradeoffs" when the user asks about patterns, alternatives, or architectural choices.
+- Put one concise takeaway in "recommendation" when the user asks what to choose or what to do.
 
 If other steps in the walkthrough are relevant to your answer, you may refer to them naturally in the prose AND list their ids in "relatedSteps" so the reader can jump to them.
 
@@ -21689,8 +21747,25 @@ var walkthrough_default = `<!DOCTYPE html>
   .qa-item { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
   .qa-q { font-weight: 600; color: var(--accent); }
   .qa-q::before { content: "Q "; opacity: .6; }
-  .qa-a { margin-top: 6px; white-space: pre-wrap; }
-  .qa-a::before { content: "A "; opacity: .6; font-weight: 600; }
+  .qa-a-label { margin-top: 8px; opacity: .6; font-weight: 600; }
+  .qa-a { margin-top: 4px; }
+  .qa-a p { margin: 0 0 10px; }
+  .qa-a p:last-child { margin-bottom: 0; }
+  .qa-a h4 { margin: 14px 0 6px; font-size: 14px; color: var(--text); }
+  .qa-a ul { margin: 6px 0 10px 20px; padding: 0; }
+  .qa-a li { margin: 3px 0; }
+  .qa-a code { background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 4px; padding: 1px 4px; }
+  .qa-a pre code { background: transparent; border: 0; padding: 0; }
+  .qa-a .md-code { margin: 10px 0 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--code-bg); }
+  .qa-a .md-code .code-lang { padding: 5px 9px; background: rgba(255,255,255,.04); color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .qa-a .answer-note { margin: 10px 0; padding: 10px 12px; border-left: 3px solid var(--accent-2); background: rgba(158,206,106,.08); border-radius: 6px; }
+  .qa-a .answer-example { margin-top: 12px; }
+  .qa-a .answer-example-title { font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+  .qa-a .answer-example-caption { color: var(--muted); font-size: 14px; margin-top: -4px; margin-bottom: 8px; }
+  .qa-a table { width: 100%; border-collapse: collapse; margin: 10px 0 12px; font-size: 14px; }
+  .qa-a th, .qa-a td { border: 1px solid var(--border); padding: 7px 9px; vertical-align: top; }
+  .qa-a th { background: rgba(255,255,255,.05); text-align: left; color: var(--text); }
+  .qa-a td { color: #d4dae5; }
   .qa-jumps { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
   .qa-jump { background: transparent; color: var(--accent-2); border: 1px solid var(--border); border-radius: 99px; padding: 4px 11px; font-size: 12.5px; cursor: pointer; }
   .qa-jump:hover { border-color: var(--accent-2); }
@@ -21769,6 +21844,122 @@ var walkthrough_default = `<!DOCTYPE html>
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const escAttr = (s) => esc(s).replace(/"/g, '&quot;');
+
+  function renderInline(md) {
+    let out = esc(md);
+    out = out.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+    out = out.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+    return out;
+  }
+
+  const isFence = (line) => /^\`\`\`([\\w.+-]*)\\s*$/.test(line);
+  const isHeading = (line) => /^#{2,4}\\s+\\S/.test(line);
+  const isListItem = (line) => /^\\s*[-*]\\s+\\S/.test(line);
+  const isTableSep = (line) => /^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$/.test(line);
+
+  function splitTableRow(line) {
+    return line.trim().replace(/^\\|/, '').replace(/\\|$/, '').split('|').map((c) => c.trim());
+  }
+
+  function renderMarkdown(md) {
+    const lines = String(md || '').replace(/\\r\\n/g, '\\n').split('\\n');
+    const html = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line.trim()) { i++; continue; }
+
+      const fence = line.match(/^\`\`\`([\\w.+-]*)\\s*$/);
+      if (fence) {
+        const lang = fence[1] || '';
+        const code = [];
+        i++;
+        while (i < lines.length && !isFence(lines[i])) code.push(lines[i++]);
+        if (i < lines.length) i++;
+        html.push(\`<div class="md-code">\${lang ? \`<div class="code-lang">\${esc(lang)}</div>\` : ''}<pre><code class="\${escAttr(lang ? \`language-\${lang}\` : '')}">\${esc(code.join('\\n'))}</code></pre></div>\`);
+        continue;
+      }
+
+      if (isHeading(line)) {
+        html.push(\`<h4>\${renderInline(line.replace(/^#{2,4}\\s+/, ''))}</h4>\`);
+        i++;
+        continue;
+      }
+
+      if (line.includes('|') && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+        const headers = splitTableRow(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].includes('|') && lines[i].trim()) rows.push(splitTableRow(lines[i++]));
+        html.push('<table><thead><tr>' + headers.map((h) => \`<th>\${renderInline(h)}</th>\`).join('') + '</tr></thead><tbody>' +
+          rows.map((r) => '<tr>' + headers.map((_, idx) => \`<td>\${renderInline(r[idx] || '')}</td>\`).join('') + '</tr>').join('') +
+          '</tbody></table>');
+        continue;
+      }
+
+      if (isListItem(line)) {
+        const items = [];
+        while (i < lines.length && isListItem(lines[i])) {
+          items.push(lines[i].replace(/^\\s*[-*]\\s+/, ''));
+          i++;
+        }
+        html.push('<ul>' + items.map((item) => \`<li>\${renderInline(item)}</li>\`).join('') + '</ul>');
+        continue;
+      }
+
+      const para = [];
+      while (
+        i < lines.length &&
+        lines[i].trim() &&
+        !isFence(lines[i]) &&
+        !isHeading(lines[i]) &&
+        !isListItem(lines[i]) &&
+        !(lines[i].includes('|') && i + 1 < lines.length && isTableSep(lines[i + 1]))
+      ) {
+        para.push(lines[i].trim());
+        i++;
+      }
+      html.push(\`<p>\${renderInline(para.join(' '))}</p>\`);
+    }
+
+    return html.join('');
+  }
+
+  function renderCodeExamples(examples) {
+    if (!Array.isArray(examples) || !examples.length) return '';
+    return examples.map((ex) => {
+      const lang = String(ex.language || '').trim();
+      return '<div class="answer-example">' +
+        (ex.title ? \`<div class="answer-example-title">\${esc(ex.title)}</div>\` : '') +
+        (ex.caption ? \`<div class="answer-example-caption">\${esc(ex.caption)}</div>\` : '') +
+        \`<div class="md-code">\${lang ? \`<div class="code-lang">\${esc(lang)}</div>\` : ''}<pre><code class="\${escAttr(lang ? \`language-\${lang}\` : '')}">\${esc(ex.code || '')}</code></pre></div>\` +
+        '</div>';
+    }).join('');
+  }
+
+  function renderTradeoffs(tradeoffs) {
+    if (!Array.isArray(tradeoffs) || !tradeoffs.length) return '';
+    const list = (items) => Array.isArray(items) && items.length
+      ? '<ul>' + items.map((x) => \`<li>\${renderInline(x)}</li>\`).join('') + '</ul>'
+      : '';
+    return '<h4>Tradeoffs</h4><table><thead><tr><th>Option</th><th>Pros</th><th>Cons</th><th>Best when</th></tr></thead><tbody>' +
+      tradeoffs.map((t) => '<tr>' +
+        \`<td>\${renderInline(t.option || '')}</td>\` +
+        \`<td>\${list(t.pros)}</td>\` +
+        \`<td>\${list(t.cons)}</td>\` +
+        \`<td>\${renderInline(t.bestWhen || '')}</td>\` +
+      '</tr>').join('') +
+      '</tbody></table>';
+  }
+
+  function renderAnswer(item) {
+    return (item.recommendation ? \`<div class="answer-note"><strong>Recommendation:</strong> \${renderInline(item.recommendation)}</div>\` : '') +
+      renderMarkdown(item.answer || '') +
+      renderCodeExamples(item.codeExamples) +
+      renderTradeoffs(item.tradeoffs);
+  }
 
   // Token-aware fetch: every /api/* call presents the per-server token (\xA73.6).
   function apiFetch(url, options = {}) {
@@ -21828,7 +22019,8 @@ var walkthrough_default = `<!DOCTYPE html>
       const isLast = flashLast && qi === qa.length - 1;
       html += \`<div class="qa-item\${isLast ? ' qa-new' : ''}">\`;
       html += \`<div class="qa-q">\${esc(item.question)}</div>\`;
-      html += \`<div class="qa-a">\${esc(item.answer)}</div>\`;
+      html += '<div class="qa-a-label">A</div>';
+      html += \`<div class="qa-a">\${renderAnswer(item)}</div>\`;
       const jumps = (item.relatedSteps || [])
         .map((id) => ({ id, i: indexOfId(id) }))
         .filter((x) => x.i >= 0);
