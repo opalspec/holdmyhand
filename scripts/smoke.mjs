@@ -21,6 +21,32 @@ let passed = 0;
 const ok = (m) => { passed++; process.stdout.write(`  ✓ ${m}\n`); };
 
 // ── 1. persist core ─────────────────────────────────────────────────────────
+async function testSchemas() {
+  process.stdout.write('schemas:\n');
+  const { extractAnswer } = await import('../src/core/schema.js');
+  const parsed = extractAnswer(JSON.stringify({
+    answer: 'Use `AppScopes` for the local pattern, then consider a package if it grows.',
+    recommendation: 'Keep distinct concerns in distinct scopes.',
+    codeExamples: [{
+      title: 'Pseudo-code',
+      language: 'dart',
+      code: 'AppScopes(child: MyApp())',
+      caption: 'A flattened wrapper around several scopes.',
+    }],
+    tradeoffs: [{
+      option: 'MultiProvider',
+      pros: ['Flattens provider nesting'],
+      cons: ['Adds a dependency'],
+      bestWhen: 'There are several independent ChangeNotifiers.',
+    }],
+    relatedSteps: ['step-2'],
+  }));
+  assert.equal(parsed.codeExamples.length, 1);
+  assert.equal(parsed.tradeoffs.length, 1);
+  assert.equal(parsed.recommendation.includes('distinct'), true);
+  ok('structured follow-up answers validate');
+}
+
 async function testPersist() {
   process.stdout.write('persist core:\n');
   const dir = await mkdtemp(path.join(tmpdir(), 'hmh-persist-'));
@@ -195,6 +221,7 @@ async function testServer() {
   }
 }
 
+await testSchemas();
 await testPersist();
 await testServer();
 process.stdout.write(`\nAll ${passed} smoke checks passed.\n`);

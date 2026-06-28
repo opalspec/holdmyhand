@@ -45,11 +45,28 @@ const repoRelativeFile = z
     return !norm.split('/').includes('..'); // no traversal
   }, { message: 'file must be a relative path inside the repo (no absolute paths, drive letters, or "..")' });
 
+const answerCodeExampleSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  language: z.string().max(40).optional(),
+  code: z.string().min(1).max(LIMITS.maxCode),
+  caption: z.string().max(1_000).optional(),
+});
+
+const answerTradeoffSchema = z.object({
+  option: z.string().min(1).max(300),
+  pros: z.array(z.string().min(1).max(800)).max(8).optional().default([]),
+  cons: z.array(z.string().min(1).max(800)).max(8).optional().default([]),
+  bestWhen: z.string().max(1_000).optional(),
+});
+
 // A follow-up Q&A attached to a step. Additive: asking never changes the step's
 // core content, it only appends one of these.
 const qaEntrySchema = z.object({
   question: z.string().min(1).max(LIMITS.maxQuestion),
   answer: z.string().min(1).max(LIMITS.maxAnswer),
+  recommendation: z.string().max(2_000).optional(),
+  codeExamples: z.array(answerCodeExampleSchema).max(6).optional().default([]),
+  tradeoffs: z.array(answerTradeoffSchema).max(8).optional().default([]),
   relatedSteps: z.array(z.string()).optional().default([]),
   askedAt: z.string().optional(), // stamped by the server when persisted
 });
@@ -95,7 +112,10 @@ export const walkthroughSchema = z.object({
 // The focused "answer a question about a step" response. Small + cheap: the
 // agent returns just an answer plus the ids of any other relevant steps.
 export const answerSchema = z.object({
-  answer: z.string().min(1),
+  answer: z.string().min(1).max(LIMITS.maxAnswer),
+  recommendation: z.string().max(2_000).optional(),
+  codeExamples: z.array(answerCodeExampleSchema).max(6).optional().default([]),
+  tradeoffs: z.array(answerTradeoffSchema).max(8).optional().default([]),
   relatedSteps: z.array(z.string()).optional().default([]),
 });
 
@@ -128,7 +148,24 @@ export const schemaDescription = `{
  * Description of the answer schema, injected into the follow-up prompt.
  */
 export const answerSchemaDescription = `{
-  "answer": "<plain-English answer to the reader's question about this step>",
+  "answer": "<plain-English answer to the reader's question. Markdown is allowed for short headings, bullets, tables, inline code, and fenced code blocks. Start with the direct answer.>",
+  "recommendation": "<optional: one concise recommendation when the question asks what to choose or what to do>",
+  "codeExamples": [
+    {
+      "title": "<optional short title>",
+      "language": "<optional language id, e.g. dart, ts, js, py>",
+      "code": "<supporting code or pseudo-code. Use real code only when you inspected it; label pseudo-code in the title or caption.>",
+      "caption": "<optional: what this example demonstrates>"
+    }
+  ],
+  "tradeoffs": [
+    {
+      "option": "<option name>",
+      "pros": ["<short pro>"],
+      "cons": ["<short con>"],
+      "bestWhen": "<optional: when to choose this option>"
+    }
+  ],
   "relatedSteps": ["<optional: ids of OTHER steps whose content is relevant to this answer, e.g. 'step-3'>"]
 }`;
 

@@ -54,8 +54,25 @@
   .qa-item { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
   .qa-q { font-weight: 600; color: var(--accent); }
   .qa-q::before { content: "Q "; opacity: .6; }
-  .qa-a { margin-top: 6px; white-space: pre-wrap; }
-  .qa-a::before { content: "A "; opacity: .6; font-weight: 600; }
+  .qa-a-label { margin-top: 8px; opacity: .6; font-weight: 600; }
+  .qa-a { margin-top: 4px; }
+  .qa-a p { margin: 0 0 10px; }
+  .qa-a p:last-child { margin-bottom: 0; }
+  .qa-a h4 { margin: 14px 0 6px; font-size: 14px; color: var(--text); }
+  .qa-a ul { margin: 6px 0 10px 20px; padding: 0; }
+  .qa-a li { margin: 3px 0; }
+  .qa-a code { background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 4px; padding: 1px 4px; }
+  .qa-a pre code { background: transparent; border: 0; padding: 0; }
+  .qa-a .md-code { margin: 10px 0 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--code-bg); }
+  .qa-a .md-code .code-lang { padding: 5px 9px; background: rgba(255,255,255,.04); color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .qa-a .answer-note { margin: 10px 0; padding: 10px 12px; border-left: 3px solid var(--accent-2); background: rgba(158,206,106,.08); border-radius: 6px; }
+  .qa-a .answer-example { margin-top: 12px; }
+  .qa-a .answer-example-title { font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+  .qa-a .answer-example-caption { color: var(--muted); font-size: 14px; margin-top: -4px; margin-bottom: 8px; }
+  .qa-a table { width: 100%; border-collapse: collapse; margin: 10px 0 12px; font-size: 14px; }
+  .qa-a th, .qa-a td { border: 1px solid var(--border); padding: 7px 9px; vertical-align: top; }
+  .qa-a th { background: rgba(255,255,255,.05); text-align: left; color: var(--text); }
+  .qa-a td { color: #d4dae5; }
   .qa-jumps { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
   .qa-jump { background: transparent; color: var(--accent-2); border: 1px solid var(--border); border-radius: 99px; padding: 4px 11px; font-size: 12.5px; cursor: pointer; }
   .qa-jump:hover { border-color: var(--accent-2); }
@@ -134,6 +151,122 @@
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const escAttr = (s) => esc(s).replace(/"/g, '&quot;');
+
+  function renderInline(md) {
+    let out = esc(md);
+    out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    return out;
+  }
+
+  const isFence = (line) => /^```([\w.+-]*)\s*$/.test(line);
+  const isHeading = (line) => /^#{2,4}\s+\S/.test(line);
+  const isListItem = (line) => /^\s*[-*]\s+\S/.test(line);
+  const isTableSep = (line) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+
+  function splitTableRow(line) {
+    return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+  }
+
+  function renderMarkdown(md) {
+    const lines = String(md || '').replace(/\r\n/g, '\n').split('\n');
+    const html = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line.trim()) { i++; continue; }
+
+      const fence = line.match(/^```([\w.+-]*)\s*$/);
+      if (fence) {
+        const lang = fence[1] || '';
+        const code = [];
+        i++;
+        while (i < lines.length && !isFence(lines[i])) code.push(lines[i++]);
+        if (i < lines.length) i++;
+        html.push(`<div class="md-code">${lang ? `<div class="code-lang">${esc(lang)}</div>` : ''}<pre><code class="${escAttr(lang ? `language-${lang}` : '')}">${esc(code.join('\n'))}</code></pre></div>`);
+        continue;
+      }
+
+      if (isHeading(line)) {
+        html.push(`<h4>${renderInline(line.replace(/^#{2,4}\s+/, ''))}</h4>`);
+        i++;
+        continue;
+      }
+
+      if (line.includes('|') && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+        const headers = splitTableRow(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].includes('|') && lines[i].trim()) rows.push(splitTableRow(lines[i++]));
+        html.push('<table><thead><tr>' + headers.map((h) => `<th>${renderInline(h)}</th>`).join('') + '</tr></thead><tbody>' +
+          rows.map((r) => '<tr>' + headers.map((_, idx) => `<td>${renderInline(r[idx] || '')}</td>`).join('') + '</tr>').join('') +
+          '</tbody></table>');
+        continue;
+      }
+
+      if (isListItem(line)) {
+        const items = [];
+        while (i < lines.length && isListItem(lines[i])) {
+          items.push(lines[i].replace(/^\s*[-*]\s+/, ''));
+          i++;
+        }
+        html.push('<ul>' + items.map((item) => `<li>${renderInline(item)}</li>`).join('') + '</ul>');
+        continue;
+      }
+
+      const para = [];
+      while (
+        i < lines.length &&
+        lines[i].trim() &&
+        !isFence(lines[i]) &&
+        !isHeading(lines[i]) &&
+        !isListItem(lines[i]) &&
+        !(lines[i].includes('|') && i + 1 < lines.length && isTableSep(lines[i + 1]))
+      ) {
+        para.push(lines[i].trim());
+        i++;
+      }
+      html.push(`<p>${renderInline(para.join(' '))}</p>`);
+    }
+
+    return html.join('');
+  }
+
+  function renderCodeExamples(examples) {
+    if (!Array.isArray(examples) || !examples.length) return '';
+    return examples.map((ex) => {
+      const lang = String(ex.language || '').trim();
+      return '<div class="answer-example">' +
+        (ex.title ? `<div class="answer-example-title">${esc(ex.title)}</div>` : '') +
+        (ex.caption ? `<div class="answer-example-caption">${esc(ex.caption)}</div>` : '') +
+        `<div class="md-code">${lang ? `<div class="code-lang">${esc(lang)}</div>` : ''}<pre><code class="${escAttr(lang ? `language-${lang}` : '')}">${esc(ex.code || '')}</code></pre></div>` +
+        '</div>';
+    }).join('');
+  }
+
+  function renderTradeoffs(tradeoffs) {
+    if (!Array.isArray(tradeoffs) || !tradeoffs.length) return '';
+    const list = (items) => Array.isArray(items) && items.length
+      ? '<ul>' + items.map((x) => `<li>${renderInline(x)}</li>`).join('') + '</ul>'
+      : '';
+    return '<h4>Tradeoffs</h4><table><thead><tr><th>Option</th><th>Pros</th><th>Cons</th><th>Best when</th></tr></thead><tbody>' +
+      tradeoffs.map((t) => '<tr>' +
+        `<td>${renderInline(t.option || '')}</td>` +
+        `<td>${list(t.pros)}</td>` +
+        `<td>${list(t.cons)}</td>` +
+        `<td>${renderInline(t.bestWhen || '')}</td>` +
+      '</tr>').join('') +
+      '</tbody></table>';
+  }
+
+  function renderAnswer(item) {
+    return (item.recommendation ? `<div class="answer-note"><strong>Recommendation:</strong> ${renderInline(item.recommendation)}</div>` : '') +
+      renderMarkdown(item.answer || '') +
+      renderCodeExamples(item.codeExamples) +
+      renderTradeoffs(item.tradeoffs);
+  }
 
   // Token-aware fetch: every /api/* call presents the per-server token (§3.6).
   function apiFetch(url, options = {}) {
@@ -193,7 +326,8 @@
       const isLast = flashLast && qi === qa.length - 1;
       html += `<div class="qa-item${isLast ? ' qa-new' : ''}">`;
       html += `<div class="qa-q">${esc(item.question)}</div>`;
-      html += `<div class="qa-a">${esc(item.answer)}</div>`;
+      html += '<div class="qa-a-label">A</div>';
+      html += `<div class="qa-a">${renderAnswer(item)}</div>`;
       const jumps = (item.relatedSteps || [])
         .map((id) => ({ id, i: indexOfId(id) }))
         .filter((x) => x.i >= 0);
