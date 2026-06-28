@@ -6894,8 +6894,9 @@ var require_dist = __commonJS({
 
 // src/mcp/server.js
 import http from "node:http";
+import net from "node:net";
 import { spawn as spawn3 } from "node:child_process";
-import { appendFile, mkdir as mkdir2, readFile as readFile3 } from "node:fs/promises";
+import { appendFile, mkdir as mkdir2, readFile as readFile3, writeFile as writeFile2, unlink } from "node:fs/promises";
 import { randomBytes as randomBytes2 } from "node:crypto";
 import path3 from "node:path";
 
@@ -22290,6 +22291,9 @@ var HMH_DIR = path3.join(CODEBASE, ".hmh");
 var CONFIG_PATH = path3.join(HMH_DIR, "config.json");
 var DEFAULT_PORT = 7345;
 var TOKEN = randomBytes2(24).toString("hex");
+var APP_ID = "hold-my-hand";
+var VERSION = "0.1.0";
+var INSTANCE_PATH = path3.join(HMH_DIR, "server.json");
 var store = createStore({ baseDir: HMH_DIR });
 var projectConfig = null;
 async function loadProjectConfig() {
@@ -22405,6 +22409,10 @@ async function handleRequest(req, res) {
     res.end(html);
     return;
   }
+  if (req.method === "GET" && pathname === "/hmh-id") {
+    sendJson(res, 200, { app: APP_ID, pid: process.pid, version: VERSION, port: httpState?.port ?? null });
+    return;
+  }
   if (pathname.startsWith("/api/")) {
     if (!authed(req, url)) {
       sendJson(res, 403, { error: "Forbidden" });
@@ -22483,6 +22491,109 @@ async function handleRequest(req, res) {
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Not found");
 }
+var delay = (ms) => new Promise((r) => setTimeout(r, ms));
+function probeId(port) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: "127.0.0.1", port, path: "/hmh-id", timeout: 500 }, (res) => {
+      let raw = "";
+      res.on("data", (c) => raw += c);
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+function portFree(port) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ port, host: "127.0.0.1" });
+    const done = (free) => {
+      sock.removeAllListeners();
+      sock.destroy();
+      resolve(free);
+    };
+    sock.once("connect", () => done(false));
+    sock.once("error", () => done(true));
+    sock.setTimeout(400, () => done(true));
+  });
+}
+async function waitPortFree(port, ms) {
+  const deadline = Date.now() + ms;
+  do {
+    if (await portFree(port)) return true;
+    await delay(100);
+  } while (Date.now() < deadline);
+  return false;
+}
+async function reclaimStalePorts(preferredPort) {
+  const candidates = /* @__PURE__ */ new Set([preferredPort]);
+  try {
+    const prev = JSON.parse(await readFile3(INSTANCE_PATH, "utf8"));
+    if (Number.isInteger(prev?.port)) candidates.add(prev.port);
+  } catch {
+  }
+  for (const port of candidates) {
+    const id = await probeId(port);
+    if (!id || id.app !== APP_ID || !Number.isInteger(id.pid)) continue;
+    if (id.pid === process.pid) continue;
+    try {
+      process.kill(id.pid);
+      await log(`reclaimed port ${port} from stale HMH instance pid=${id.pid} (v${id.version || "?"})`);
+      await waitPortFree(port, 2500);
+    } catch (e) {
+      await log(`could not terminate stale HMH pid=${id.pid} on port ${port}: ${e.message}`);
+    }
+  }
+}
+async function writeInstanceFile(port) {
+  try {
+    await mkdir2(HMH_DIR, { recursive: true });
+    await writeFile2(
+      INSTANCE_PATH,
+      JSON.stringify({ app: APP_ID, pid: process.pid, port, token: TOKEN, version: VERSION, startedAt: (/* @__PURE__ */ new Date()).toISOString() }),
+      "utf8"
+    );
+  } catch (e) {
+    await log(`could not write instance file: ${e.message}`);
+  }
+}
+async function removeInstanceFile() {
+  try {
+    const prev = JSON.parse(await readFile3(INSTANCE_PATH, "utf8"));
+    if (prev?.pid === process.pid) await unlink(INSTANCE_PATH);
+  } catch {
+  }
+}
+var shuttingDown = false;
+async function shutdown(reason) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await log(`shutting down (${reason})`);
+  try {
+    if (httpState?.server) await new Promise((r) => httpState.server.close(() => r()));
+  } catch {
+  }
+  await removeInstanceFile();
+  process.exit(0);
+}
+function installShutdownHooks() {
+  process.stdin.on("end", () => shutdown("stdin EOF (parent disconnected)"));
+  process.stdin.on("close", () => shutdown("stdin closed (parent disconnected)"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  try {
+    mcp.server.onclose = () => shutdown("MCP transport closed");
+  } catch {
+  }
+}
 function listen(server, port) {
   return new Promise((resolve, reject) => {
     const onErr = (err) => {
@@ -22509,12 +22620,15 @@ async function ensureHttp() {
       }
     });
   });
-  let port = await resolvePreferredPort();
+  const preferred = await resolvePreferredPort();
+  await reclaimStalePorts(preferred);
+  let port = preferred;
   for (let i = 0; i < 25; i++) {
     try {
       await listen(server, port);
       httpState = { server, port, url: `http://127.0.0.1:${port}` };
-      await log(`http listening on ${httpState.url}`);
+      await writeInstanceFile(port);
+      await log(port === preferred ? `http listening on ${httpState.url}` : `http listening on ${httpState.url} (preferred ${preferred} was busy)`);
       return httpState;
     } catch (err) {
       if (err.code === "EADDRINUSE") {
@@ -22667,6 +22781,7 @@ var engine;
 async function main() {
   const transport = new StdioServerTransport();
   await mcp.connect(transport);
+  installShutdownHooks();
   await log(IS_CHILD ? "started in child/inert mode" : `started (codebase=${CODEBASE})`);
 }
 main().catch((err) => {
