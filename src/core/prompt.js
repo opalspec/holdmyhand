@@ -17,6 +17,7 @@ const EXPLANATION_QUALITY_RULES = `Quality bar:
 - Label pseudo-code clearly; do not present invented code as existing code.
 - For design or "which pattern?" questions, compare the local approach with relevant alternatives, include tradeoffs, and end with a decision rule.
 - Mention popular frameworks, libraries, or industry practices only when they are genuinely relevant to the user's question. If an option is not implemented in this codebase, say so clearly.
+- When a relationship is clearer seen than read — a data or control flow, a request/response sequence, a state machine, or how modules/tables depend on each other — include ONE small diagram as a fenced \`\`\`mermaid block, then still explain it in prose (the diagram complements the words, it never replaces them). Prefer \`flowchart\` or \`sequenceDiagram\`, keep it focused, and don't diagram trivial points.
 - Keep simple questions concise; add deeper sections only when they materially improve the answer.`;
 
 const GENERATE_RULES = `You are explaining a codebase to someone who is smart but unfamiliar with it.

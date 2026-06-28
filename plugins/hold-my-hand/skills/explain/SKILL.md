@@ -27,6 +27,11 @@ JSON shape matter more than prose flourish.
      alternatives, include tradeoffs, and end with a decision rule.
    - Mention popular frameworks, libraries, or industry practices only when they are
      genuinely relevant. If an option is not implemented in this codebase, say so.
+   - When a relationship is clearer seen than read — a data or control flow, a
+     request/response sequence, a state machine, or how modules/tables depend on each
+     other — include ONE small diagram as a fenced `mermaid` block (inside an
+     `explanation`), then still explain it in prose. Prefer `flowchart` or
+     `sequenceDiagram`, keep it focused, and don't diagram trivial points.
    - Label pseudo-code clearly; do not present invented code as existing code.
 3. **Render it.** Call the MCP tool **`render_walkthrough`** with `{ "walkthrough": <your JSON> }`.
 4. **Self-correct.** If the tool returns validation or source-verification problems, it

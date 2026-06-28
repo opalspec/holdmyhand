@@ -248,6 +248,17 @@
   }
   .explanation p { margin: 0 0 18px; }
   .explanation p:last-child { margin-bottom: 0; }
+  .mermaid-diagram {
+    background: var(--bg-code);
+    border: 1px solid var(--border-code);
+    border-radius: var(--radius-code);
+    margin: 24px 0;
+    overflow-x: auto;
+    padding: 18px;
+    text-align: center;
+  }
+  .mermaid-diagram svg { height: auto; max-width: 100%; }
+  .mermaid-diagram.mermaid-failed { background: none; border: 0; padding: 0; text-align: left; }
   .codewrap {
     background: var(--bg-code);
     border: 1px solid var(--border-code);
@@ -565,7 +576,14 @@
         i++;
         while (i < lines.length && !isFence(lines[i])) code.push(lines[i++]);
         if (i < lines.length) i++;
-        html.push(`<div class="md-code">${lang ? `<div class="code-lang">${esc(lang)}</div>` : ''}<pre><code class="${escAttr(lang ? `language-${lang}` : '')}">${esc(code.join('\n'))}</code></pre></div>`);
+        const body = code.join('\n');
+        // A ```mermaid block is a diagram, not code: emit a placeholder that
+        // renderDiagrams() turns into an SVG (lazily loading mermaid).
+        if (lang === 'mermaid') {
+          html.push(`<div class="mermaid-diagram" data-src="${escAttr(body)}"></div>`);
+          continue;
+        }
+        html.push(`<div class="md-code">${lang ? `<div class="code-lang">${esc(lang)}</div>` : ''}<pre><code class="${escAttr(lang ? `language-${lang}` : '')}">${esc(body)}</code></pre></div>`);
         continue;
       }
 
@@ -784,6 +802,68 @@
     return html;
   }
 
+  // ── Mermaid diagrams ────────────────────────────────────────────────────────
+  // Diagrams arrive as ```mermaid fenced blocks inside markdown fields and are
+  // emitted by renderMarkdown as <div class="mermaid-diagram" data-src="…">
+  // placeholders. Mermaid is loaded lazily from a CDN, and ONLY when a page
+  // actually contains a diagram, so diagram-free walkthroughs pay nothing. (The
+  // page already depends on a CDN for fonts, so this adds no new offline
+  // assumption.) A diagram that fails to parse — or a CDN we can't reach — falls
+  // back to its raw source, so a bad diagram from the agent never blanks a step.
+  const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  let mermaidPromise = null;
+  let diagramSeq = 0;
+
+  function loadMermaid() {
+    if (!mermaidPromise) {
+      mermaidPromise = import(MERMAID_CDN).then(({ default: mermaid }) => {
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: 'dark',
+          themeVariables: {
+            background: '#0a0b10',
+            primaryColor: '#1b1430',
+            primaryBorderColor: '#8b5cf6',
+            primaryTextColor: '#e6e9ef',
+            lineColor: '#6f7488',
+            fontFamily: "'IBM Plex Sans', sans-serif",
+          },
+        });
+        return mermaid;
+      });
+    }
+    return mermaidPromise;
+  }
+
+  const diagramFallback = (node) => {
+    node.classList.add('mermaid-failed');
+    node.innerHTML = `<div class="md-code"><div class="code-lang">mermaid</div><pre><code>${esc(node.getAttribute('data-src') || '')}</code></pre></div>`;
+  };
+
+  function renderDiagrams() {
+    const nodes = $('card').querySelectorAll('.mermaid-diagram:not([data-rendered])');
+    if (!nodes.length) return;
+    loadMermaid().then((mermaid) => {
+      nodes.forEach(async (node) => {
+        node.setAttribute('data-rendered', '');
+        try {
+          const { svg } = await mermaid.render(`hmh-d${++diagramSeq}`, node.getAttribute('data-src') || '');
+          node.innerHTML = svg;
+        } catch {
+          diagramFallback(node);
+        }
+      });
+    }).catch(() => {
+      // CDN unreachable (e.g. offline): degrade every diagram to its source.
+      nodes.forEach((node) => {
+        if (node.hasAttribute('data-rendered')) return;
+        node.setAttribute('data-rendered', '');
+        diagramFallback(node);
+      });
+    });
+  }
+
   function renderStep(flashLastQa) {
     const steps = data.steps || [];
     if (index >= steps.length) index = steps.length - 1;
@@ -802,6 +882,7 @@
     if (step.why) html += `<div class="why"><strong>Why this matters</strong> ${renderInline(step.why)}</div>`;
     html += renderQa(step, flashLastQa);
     $('card').innerHTML = html;
+    renderDiagrams();
 
     const copy = $('copy');
     if (copy) copy.onclick = () => {
