@@ -178,25 +178,41 @@ function formatZodError(error) {
 // Shared: strip Markdown fences / surrounding prose and JSON.parse. Throws a
 // diagnosable error (including a snippet of what the agent actually said).
 function parseLooseJson(rawText) {
-  let text = String(rawText ?? '').trim();
+  const raw = String(rawText ?? '').trim();
 
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) {
-    text = fenced[1].trim();
-  } else if (!text.startsWith('{')) {
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start >= 0 && end > start) text = text.slice(start, end + 1);
+  // Build candidate strings to JSON.parse, in priority order. Try the raw text
+  // FIRST: a well-formed bare-JSON response parses immediately, and — crucially
+  // — this avoids the fence regex below wrongly matching a ```fenced``` block
+  // embedded inside a string value (e.g. a code example inside "answer"), which
+  // would otherwise extract the code instead of the JSON envelope.
+  const candidates = [raw];
+
+  // A ```json … ``` (or bare ``` … ```) wrapper around the whole response. Only
+  // relevant when the response itself isn't already a JSON object.
+  if (!raw.startsWith('{')) {
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) candidates.push(fenced[1].trim());
   }
 
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    const snippet = String(rawText ?? '').trim().slice(0, 280);
-    throw new Error(
-      `Agent did not return valid JSON (${err.message}). Response began: ${JSON.stringify(snippet)}`,
-    );
+  // Last resort: slice from the first "{" to the last "}" to peel off prose
+  // the model wrapped around the JSON.
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start >= 0 && end > start) candidates.push(raw.slice(start, end + 1));
+
+  let lastErr;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (err) {
+      lastErr = err;
+    }
   }
+
+  const snippet = raw.slice(0, 280);
+  throw new Error(
+    `Agent did not return valid JSON (${lastErr.message}). Response began: ${JSON.stringify(snippet)}`,
+  );
 }
 
 /**

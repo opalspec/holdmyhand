@@ -21246,23 +21246,27 @@ function formatZodError(error2) {
   return error2.issues.map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`).join("\n");
 }
 function parseLooseJson(rawText) {
-  let text = String(rawText ?? "").trim();
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) {
-    text = fenced[1].trim();
-  } else if (!text.startsWith("{")) {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start >= 0 && end > start) text = text.slice(start, end + 1);
+  const raw = String(rawText ?? "").trim();
+  const candidates = [raw];
+  if (!raw.startsWith("{")) {
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) candidates.push(fenced[1].trim());
   }
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    const snippet = String(rawText ?? "").trim().slice(0, 280);
-    throw new Error(
-      `Agent did not return valid JSON (${err.message}). Response began: ${JSON.stringify(snippet)}`
-    );
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start >= 0 && end > start) candidates.push(raw.slice(start, end + 1));
+  let lastErr;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (err) {
+      lastErr = err;
+    }
   }
+  const snippet = raw.slice(0, 280);
+  throw new Error(
+    `Agent did not return valid JSON (${lastErr.message}). Response began: ${JSON.stringify(snippet)}`
+  );
 }
 function extractWalkthrough(rawText) {
   const obj = parseLooseJson(rawText);
