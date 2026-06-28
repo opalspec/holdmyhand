@@ -10,8 +10,8 @@ follow-up questions that are answered and saved.
 
 Hold My Hand is a **Claude Code plugin**: it runs inside your Claude Code session,
 already in your repo, so it can read the real code to build an accurate walkthrough.
-It's a companion to [OpalSpec](https://opalspec.dev) — but works standalone or
-alongside any spec-driven framework. Name a spec and it reads both the spec and the
+It's a companion to [OpalSpec](https://opalspec.dev) — but works **standalone** or
+alongside **any** spec-driven framework. Name a spec and it reads both the spec and the
 code that fulfilled it, so you can see how the plan became reality, understand what was actually done and compare to the intended design:
 
 > *"Walk me through what the `passkey-login` spec actually implemented."* → a tour
