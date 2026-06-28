@@ -35,7 +35,12 @@ jobs:
         run: npm run build:plugin
 
       - name: Fail if generated plugin files are stale
-        run: git diff --exit-code -- plugins/hold-my-hand/dist/hmh-mcp.mjs plugins/hold-my-hand/skills/explain/SKILL.md
+        run: |
+          if ! git diff --quiet -- plugins/hold-my-hand/dist/hmh-mcp.mjs plugins/hold-my-hand/skills/explain/SKILL.md; then
+            echo "::error::Generated plugin files are stale. Run 'npm run build:plugin' and commit the updated files."
+            git diff --name-only -- plugins/hold-my-hand/dist/hmh-mcp.mjs plugins/hold-my-hand/skills/explain/SKILL.md
+            exit 1
+          fi
 
       - name: Run smoke tests
         run: npm run smoke
