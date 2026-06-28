@@ -1,7 +1,7 @@
-# Planning / internal design notes — not for distribution
+# Local planning / design notes
 Planning/
 
-# Internal docs — not for distribution
+# Local internal docs
 Docs/
 
 # Dependencies
@@ -18,7 +18,9 @@ walkthroughs/
 # (dist/hmh-mcp.mjs) MUST be committed so the plugin runs with no npm install.
 
 # Local config that points at a specific codebase
+hmh.config.json
 hmh.config.local.json
+!hmh.config.example.json
 
 # OS / editor cruft
 .DS_Store

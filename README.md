@@ -12,7 +12,7 @@ Hold My Hand is a **Claude Code plugin**: it runs inside your Claude Code sessio
 already in your repo, so it can read the real code to build an accurate walkthrough.
 It's a companion to [OpalSpec](https://opalspec.dev) — but works standalone or
 alongside any spec-driven framework. Name a spec and it reads both the spec and the
-code that fulfilled it, so you can see how the plan became reality:
+code that fulfilled it, so you can see how the plan became reality, understand what was actually done and compare to the intended design:
 
 > *"Walk me through what the `passkey-login` spec actually implemented."* → a tour
 > that maps each part of the plan to the code it became.
@@ -21,8 +21,6 @@ code that fulfilled it, so you can see how the plan became reality:
 
 - [Claude Code](https://code.claude.com) installed and authenticated (`claude` on PATH).
 - Node.js ≥ 20.19 on PATH.
-- Access to this repository to install it (currently private — you must be a
-  collaborator).
 
 ## Install
 
@@ -35,10 +33,6 @@ In any Claude Code session:
 
 On first use you'll approve the bundled `hmh` MCP server and trust the workspace —
 expected, since the plugin runs a small local server.
-
-> Private-repo note: if your Claude Code fetches marketplaces over HTTPS and your
-> GitHub login lacks access, use the SSH form instead:
-> `/plugin marketplace add git@github.com:opalspec/holdmyhand.git`
 
 Update later with `/plugin marketplace update` (install does not auto-update).
 

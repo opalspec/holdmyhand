@@ -1,0 +1,5 @@
+{
+  "codebasePath": "/path/to/a/codebase",
+  "port": 4188,
+  "model": "opus"
+}

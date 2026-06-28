@@ -15,10 +15,6 @@ questions that are answered and saved.
 
 On first use you'll approve the bundled `hmh` MCP server and trust the workspace.
 
-> Private-repo note: if your Claude Code fetches marketplaces over HTTPS and your
-> GitHub login lacks access, use the SSH form:
-> `/plugin marketplace add git@github.com:opalspec/holdmyhand.git`
-
 Update later with `/plugin marketplace update` (install does not auto-update).
 
 ## Use
