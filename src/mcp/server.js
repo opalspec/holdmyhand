@@ -18,8 +18,9 @@
 // committed bundle is self-contained and runs with no npm install.
 
 import http from 'node:http';
+import net from 'node:net';
 import { spawn } from 'node:child_process';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 
@@ -47,6 +48,11 @@ const HMH_DIR = path.join(CODEBASE, '.hmh');
 const CONFIG_PATH = path.join(HMH_DIR, 'config.json');
 const DEFAULT_PORT = 7345;
 const TOKEN = randomBytes(24).toString('hex');
+const APP_ID = 'hold-my-hand';
+const VERSION = '0.1.0';
+// Records the live server's pid/port/token so a freshly launched server can find
+// and reclaim the port from a stale predecessor after /reload-plugins.
+const INSTANCE_PATH = path.join(HMH_DIR, 'server.json');
 
 const store = createStore({ baseDir: HMH_DIR });
 
@@ -175,6 +181,15 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // ── identity probe (no secrets; loopback only) ───────────────────────────
+  // Lets a launching server confirm that whoever holds its preferred port is a
+  // stale HMH instance before it reclaims the port. Exposes nothing sensitive
+  // (no token, no codebase content) and is unauthenticated by design.
+  if (req.method === 'GET' && pathname === '/hmh-id') {
+    sendJson(res, 200, { app: APP_ID, pid: process.pid, version: VERSION, port: httpState?.port ?? null });
+    return;
+  }
+
   // ── API (all token-gated) ────────────────────────────────────────────────
   if (pathname.startsWith('/api/')) {
     if (!authed(req, url)) { sendJson(res, 403, { error: 'Forbidden' }); return; }
@@ -241,6 +256,115 @@ async function handleRequest(req, res) {
   res.end('Not found');
 }
 
+// ── reload hardening: single-instance reclaim + self-termination ─────────────
+// On /reload-plugins, Claude Code spawns a fresh server but does NOT kill the
+// previous one, and the MCP SDK's stdio transport never reacts to stdin EOF — so
+// the old process keeps its event loop alive via the HTTP listener and goes on
+// serving stale content from the port. We close that gap from both ends:
+//   • a launching server reclaims its preferred port from a *confirmed* stale HMH
+//     instance (identity-probe, then terminate), and
+//   • every server self-terminates the moment its parent disconnects (stdin EOF /
+//     transport close / signal) so orphans never accumulate.
+
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// GET /hmh-id on a port → parsed identity, or null (nobody home / not one of us).
+function probeId(port) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/hmh-id', timeout: 500 }, (res) => {
+      let raw = '';
+      res.on('data', (c) => (raw += c));
+      res.on('end', () => { try { resolve(JSON.parse(raw)); } catch { resolve(null); } });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
+// True once nothing is accepting connections on the port (ECONNREFUSED).
+function portFree(port) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ port, host: '127.0.0.1' });
+    const done = (free) => { sock.removeAllListeners(); sock.destroy(); resolve(free); };
+    sock.once('connect', () => done(false));
+    sock.once('error', () => done(true));
+    sock.setTimeout(400, () => done(true));
+  });
+}
+
+async function waitPortFree(port, ms) {
+  const deadline = Date.now() + ms;
+  do {
+    if (await portFree(port)) return true;
+    await delay(100);
+  } while (Date.now() < deadline);
+  return false;
+}
+
+// If a confirmed HMH instance holds one of our candidate ports, terminate it so we
+// can take the canonical port back. We only kill a pid that a *live* /hmh-id
+// response attributes to an HMH server on that exact port — never a bare pid from
+// the file — so a recycled pid is never collateral.
+async function reclaimStalePorts(preferredPort) {
+  const candidates = new Set([preferredPort]);
+  try {
+    const prev = JSON.parse(await readFile(INSTANCE_PATH, 'utf8'));
+    if (Number.isInteger(prev?.port)) candidates.add(prev.port);
+  } catch { /* no/invalid instance file — just probe the preferred port */ }
+
+  for (const port of candidates) {
+    const id = await probeId(port);
+    if (!id || id.app !== APP_ID || !Number.isInteger(id.pid)) continue; // not a stale us
+    if (id.pid === process.pid) continue;
+    try {
+      process.kill(id.pid); // SIGTERM (TerminateProcess on Windows): same user, same host
+      await log(`reclaimed port ${port} from stale HMH instance pid=${id.pid} (v${id.version || '?'})`);
+      await waitPortFree(port, 2500);
+    } catch (e) {
+      await log(`could not terminate stale HMH pid=${id.pid} on port ${port}: ${e.message}`);
+    }
+  }
+}
+
+async function writeInstanceFile(port) {
+  try {
+    await mkdir(HMH_DIR, { recursive: true });
+    await writeFile(
+      INSTANCE_PATH,
+      JSON.stringify({ app: APP_ID, pid: process.pid, port, token: TOKEN, version: VERSION, startedAt: new Date().toISOString() }),
+      'utf8',
+    );
+  } catch (e) { await log(`could not write instance file: ${e.message}`); }
+}
+
+async function removeInstanceFile() {
+  try {
+    const prev = JSON.parse(await readFile(INSTANCE_PATH, 'utf8'));
+    if (prev?.pid === process.pid) await unlink(INSTANCE_PATH);
+  } catch { /* nothing of ours to clean up */ }
+}
+
+let shuttingDown = false;
+async function shutdown(reason) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await log(`shutting down (${reason})`);
+  try {
+    if (httpState?.server) await new Promise((r) => httpState.server.close(() => r()));
+  } catch { /* ignore */ }
+  await removeInstanceFile();
+  process.exit(0);
+}
+
+// Self-terminate the moment our parent (Claude Code) lets go of us.
+function installShutdownHooks() {
+  process.stdin.on('end', () => shutdown('stdin EOF (parent disconnected)'));
+  process.stdin.on('close', () => shutdown('stdin closed (parent disconnected)'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  try { mcp.server.onclose = () => shutdown('MCP transport closed'); } catch { /* older SDK */ }
+}
+
 // Bind 127.0.0.1 with a free-port fallback (§3.4).
 function listen(server, port) {
   return new Promise((resolve, reject) => {
@@ -260,12 +384,17 @@ async function ensureHttp() {
       try { sendJson(res, 500, { error: err.message }); } catch { /* headers sent */ }
     });
   });
-  let port = await resolvePreferredPort();
+  const preferred = await resolvePreferredPort();
+  await reclaimStalePorts(preferred); // take our port back from any stale predecessor
+  let port = preferred;
   for (let i = 0; i < 25; i++) {
     try {
       await listen(server, port);
       httpState = { server, port, url: `http://127.0.0.1:${port}` };
-      await log(`http listening on ${httpState.url}`);
+      await writeInstanceFile(port);
+      await log(port === preferred
+        ? `http listening on ${httpState.url}`
+        : `http listening on ${httpState.url} (preferred ${preferred} was busy)`);
       return httpState;
     } catch (err) {
       if (err.code === 'EADDRINUSE') { port += 1; continue; }
@@ -438,6 +567,7 @@ if (IS_CHILD) {
 async function main() {
   const transport = new StdioServerTransport();
   await mcp.connect(transport);
+  installShutdownHooks();
   await log(IS_CHILD ? 'started in child/inert mode' : `started (codebase=${CODEBASE})`);
 }
 
