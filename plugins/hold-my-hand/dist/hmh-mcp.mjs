@@ -22810,7 +22810,13 @@ var library_default = `<!DOCTYPE html>
 `;
 
 // src/mcp/server.js
-var CODEBASE = process.env.HMH_CODEBASE || process.cwd();
+function toNativePath(p) {
+  if (process.platform !== "win32" || !p) return p;
+  let out = p.replace(/^\/cygdrive\/([a-zA-Z])\//, (_, d) => `${d.toUpperCase()}:/`);
+  out = out.replace(/^\/([a-zA-Z])\//, (_, d) => `${d.toUpperCase()}:/`);
+  return out;
+}
+var CODEBASE = toNativePath(process.env.HMH_CODEBASE || process.cwd());
 var IS_CHILD = process.env.HMH_CHILD_CLAUDE === "1";
 var HMH_DIR = path3.join(CODEBASE, ".hmh");
 var CONFIG_PATH = path3.join(HMH_DIR, "config.json");

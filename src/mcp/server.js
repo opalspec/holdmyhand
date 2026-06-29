@@ -42,7 +42,22 @@ import WALKTHROUGH_TEMPLATE from '../core/templates/walkthrough.html';
 import LIBRARY_TEMPLATE from '../core/templates/library.html';
 
 // ── environment ─────────────────────────────────────────────────────────────
-const CODEBASE = process.env.HMH_CODEBASE || process.cwd();
+// On Windows, Claude Code may be launched from a Unix-y shell (Git Bash/MSYS2 or
+// Cygwin), in which case CLAUDE_PROJECT_DIR — and thus HMH_CODEBASE — arrives as a
+// POSIX-style path: "/c/Users/..." or "/cygdrive/c/Users/...". Node's path.resolve
+// treats a leading "/c/" as drive-root-relative and produces "C:\c\Users\..." (an
+// extra "c"), so every readFile() in verifyExcerpts then fails with ENOENT. Convert
+// such paths back to native Windows form. No-op on real Windows paths and on POSIX.
+function toNativePath(p) {
+  if (process.platform !== 'win32' || !p) return p;
+  // /cygdrive/c/foo → C:/foo
+  let out = p.replace(/^\/cygdrive\/([a-zA-Z])\//, (_, d) => `${d.toUpperCase()}:/`);
+  // /c/foo → C:/foo  (MSYS2 / Git Bash)
+  out = out.replace(/^\/([a-zA-Z])\//, (_, d) => `${d.toUpperCase()}:/`);
+  return out;
+}
+
+const CODEBASE = toNativePath(process.env.HMH_CODEBASE || process.cwd());
 const IS_CHILD = process.env.HMH_CHILD_CLAUDE === '1';
 const HMH_DIR = path.join(CODEBASE, '.hmh');
 const CONFIG_PATH = path.join(HMH_DIR, 'config.json');
